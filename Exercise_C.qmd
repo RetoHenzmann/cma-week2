@@ -1,0 +1,32 @@
+---
+title: "project_data"
+format: html
+editor: visual
+---
+
+```{r}
+library("readr")    # To read CSV files
+library("sf")       # For spatial data operations
+library("dplyr")    # For data manipulation
+library("ggplot2")  # For creating graphics
+library("lubridate")# For handling date and time
+library("tmap")     # For creating thematic maps
+```
+
+```{r}
+library("sf")
+library("jsonlite")
+library("dplyr")
+gt <- jsonlite::read_json("2024_APRIL.json",simplifyVector = TRUE)
+
+df <- gt[[1]]
+
+# inspired by the following SO-answer
+# https://gis.stackexchange.com/a/319067/40929
+df2 <- df |> 
+  mutate(
+    lat = latitudeE7/1e7,
+    lon = longitudeE7/1e7
+  ) |> 
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+```
