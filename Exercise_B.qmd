@@ -1,0 +1,150 @@
+---
+title: "Exercise_B"
+format: html
+editor: visual
+---
+
+We will need the following to functions from [Exercise A](https://computationalmovementanalysis.github.io/FS24/Week2/3_exercise_a.html):
+
+```{r}
+library("readr")
+library("sf")
+library("dplyr")
+
+difftime_secs <- function(x, y){
+  as.numeric(difftime(x, y, units = "secs"))
+}
+
+distance_by_element <- function(later, now){
+  as.numeric(
+    st_distance(later, now, by_element = TRUE)
+  )
+}
+```
+
+We can then import the data. We can discard all columns with the exception of `DatetimeUTC`.
+
+```{r}
+caro <- read_delim("caro60.csv", ",") |>
+  st_as_sf(coords = c("E","N"), crs = 2056) |> 
+  select(DatetimeUTC)
+```
+
+# Task 1: Calculate speed at scale 1:
+
+In our first scale, we will assume a sampling window 𝑤 of 120 seconds. This conveniently means that for every location, you can use the previous and next location to calculate speed. Try to implement this in R.
+
+First Calculate timelag and steplength like in the previous Exercise
+
+```{r}
+caro <- mutate(caro, timelag = as.numeric(difftime_secs(lead(DatetimeUTC, n=1), lag(DatetimeUTC, n=1))))
+
+caro <- mutate(caro, steplength = as.numeric(distance_by_element(lead(geometry, n=1), lag(geometry, n=1))))
+
+```
+
+Then use these variables to calculate the speed like in Exercise A
+
+```{r}
+caro <- mutate(caro, speed = steplength/timelag)
+
+head(caro)
+```
+
+# Task 2: Calculate speed at scale 2
+
+To compare the effect of different sampling intervals, Laube and Purves ([2011](https://computationalmovementanalysis.github.io/FS24/90_references.html#ref-laube2011)) calculated speed at different scales (i.e. different sampling windows 𝑤).
+
+In the previous task, we assumed a 𝑤=120𝑠. In this task, try to implement 𝑤=240𝑠 (see [Figure 8.2](https://computationalmovementanalysis.github.io/FS24/Week2/3_exercise_b.html#fig-laube2011b)).
+
+-   Tip: Use the `n =` parameter in `lead`/`lag` to increase the offset.
+
+-   Store values *timelag*, *steplength* and *speed* in the columns `timelag2`, `steplength2` and `speed2` to distinguish them from the values from scale 1
+
+First Calculate timelag and steplength like in the previous Exercise just with another scale:
+
+```{r}
+caro <- mutate(caro, timelag2 = as.numeric(difftime_secs(lead(DatetimeUTC, n=2), lag(DatetimeUTC, n=2))))
+
+caro <- mutate(caro, steplength2 = as.numeric(distance_by_element(lead(geometry, n=2), lag(geometry, n=2))))
+```
+
+Then use these variables to calculate the speed like in Exercise A
+
+```{r}
+caro <- mutate(caro, speed2 = steplength2/timelag2)
+
+head(caro)
+```
+
+# Task 3: Calculate speed at scale 3:
+
+Redo the previous task with w = 480s
+
+```{r}
+caro <- mutate(caro, timelag3 = as.numeric(difftime_secs(lead(DatetimeUTC, n=4), lag(DatetimeUTC, n=4))))
+
+caro <- mutate(caro, steplength3 = as.numeric(distance_by_element(lead(geometry, n=4), lag(geometry, n=4))))
+```
+
+then speed:
+
+```{r}
+caro <- mutate(caro, speed3 = steplength3/timelag3)
+
+head(caro)
+```
+
+# **Task 4: Compare speed across scales**
+
+We now have a dataframe with three different speed values per sample, corresponding to the different scales / sampling windows (𝑤1=120𝑠, 𝑤2=240𝑠 and 𝑤3=480𝑠). It would now be interesting to compare these measurements and see our results correspond to those of Laube and Purves ([2011](https://computationalmovementanalysis.github.io/FS24/90_references.html#ref-laube2011)). In their experiments, the authors observe:
+
+> -   A steady decrease in median speed as the temporal analysis scale increases;
+>
+> -   A decrease in the overall variance in speed as the temporal scale increases;
+>
+> -   Lower minimum values at the shortest temporal scales;
+
+The authors visualize these observations using box plots. To to the same, we need to process our data slightly. Currently, our data looks like this:
+
+```{r}
+caro |> 
+  st_drop_geometry() |> 
+  select(DatetimeUTC, speed, speed2, speed3)
+```
+
+We can make a box plot of a single column using ggplot2:
+
+```{r}
+library(ggplot2)
+
+ggplot(caro, aes(y = speed)) + 
+    # we remove outliers to increase legibility, analogue
+  # Laube and Purves (2011)
+  geom_boxplot(outlier.shape = NA)
+```
+
+However, if we want to compare `speed` with `speed2` and `speed3`, we need need a *long* table rather than *wide* one (which is what we currently have). To make our table *long*, we can use the function `pivot_longer` from `tidyr`:
+
+```{r}
+library(tidyr)
+
+# before pivoting, let's simplify our data.frame
+caro2 <- caro |> 
+  st_drop_geometry() |> 
+  select(DatetimeUTC, speed, speed2, speed3)
+
+caro_long <- caro2 |> 
+  pivot_longer(c(speed, speed2, speed3))
+  
+head(caro_long)
+```
+
+```{r}
+ggplot(caro_long, aes(name, value)) +
+  # we remove outliers to increase legibility, analogue
+  # Laube and Purves (2011)
+  geom_boxplot(outliers = FALSE)+
+  theme_minimal()
+ 
+```
